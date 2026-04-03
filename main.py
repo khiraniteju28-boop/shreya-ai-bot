@@ -78,3 +78,7 @@ def callback_query(call):
 
 if __name__ == "__main__":
     bot.infinity_polling()
+if __name__ == "__main__":
+    print("Sanu AI Bot is Starting...")
+    bot.remove_webhook() # Ye line zaroori hai conflict hatane ke liye
+    bot.infinity_polling()
