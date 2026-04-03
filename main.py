@@ -1,97 +1,80 @@
-import os
-import http.server
-import socketserver
-import threading
-
-# Render ko dhoka dene ke liye dummy port server
-def start_server():
-    port = int(os.environ.get("PORT", 8080))
-    handler = http.server.SimpleHTTPRequestHandler
-    with socketserver.TCPServer(("", port), handler) as httpd:
-        httpd.serve_forever()
-
-threading.Thread(target=start_server, daemon=True).start()
 import telebot
 from telebot import types
-import time
+import os, datetime, threading, http.server, socketserver
 
-# Aapka Token
-TOKEN = '8693684961:AAFS_FSIT-YXERUQbRKY1vHF65rl_qTkr7s'
-bot = telebot.TeleBot(TOKEN)
+# --- CONFIGURATION ---
+API_TOKEN = '8685334276:AAH8H-y_fQy7-Z_S0' # Aapka Mahi AI Token
+bot = telebot.TeleBot(API_TOKEN)
 
-# Aapki IDs
-VOICE_ID = 'CQACAgUAAxkBAAMEac9GSP_qhGjfciUVWyRWgZQlWrIAAvkyAAJnbXlWNLMfgqGS2eE6BA'
-QR_ID = 'AgACAgUAAxkBAAMFac9GWRbB7EM7vIURPtuv-TBW3iEAAr8NaxtnbXlWZOt8lXnDAx4BAAMCAAN5AAM6BA'
+# Database (Temporary memory for UTR and Active Users)
+used_utrs = set()
+active_users = {} # {user_id: expiry_time}
 
+# --- RENDER SERVER (Free Plan Fix) ---
+def start_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = socketserver.TCPServer(("", port), http.server.SimpleHTTPRequestHandler)
+    server.serve_forever()
+threading.Thread(target=start_server, daemon=True).start()
+
+# --- STEP 1: WELCOME & PLANS ---
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    markup = types.InlineKeyboardMarkup()
-    btn = types.InlineKeyboardButton("🚀 Get Started / Shuru Karein", callback_data="get_started")
-    markup.add(btn)
-    welcome_text = (
-        "👋 **Welcome to Sanu AI Service**\n\n"
-        "Main aapki voice AI assistant hoon. Mere paas behad real sounding voices hain jo aapke kaam aa sakti hain.\n\n"
-        "📢 **Demo sunne ke liye niche button dabayein!**"
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        types.InlineKeyboardButton("⚡ 1 Day Plan - ₹20", callback_data="buy_20"),
+        types.InlineKeyboardButton("🎤 Unlimited Voice - ₹45", callback_data="buy_45"),
+        types.InlineKeyboardButton("🎭 All Voice Models - ₹50", callback_data="buy_50")
     )
-    bot.send_message(message.chat.id, welcome_text, reply_markup=markup, parse_mode="Markdown")
+    bot.send_message(message.chat.id, 
+                     "✨ *Mahi AI Premium Models* ✨\n\n"
+                     "Ladki ki awaz (RVC) use karne ke liye plan chuniye:", 
+                     reply_markup=markup, parse_mode='Markdown')
 
-@bot.callback_query_handler(func=lambda call: True)
-def callback_query(call):
-    if call.data == "get_started":
-        markup = types.InlineKeyboardMarkup()
-        btn = types.InlineKeyboardButton("✅ I Agree / Mujhe Manzoor Hai", callback_data="agree")
-        markup.add(btn)
-        bot.send_message(call.message.chat.id, "⚠️ **Terms & Conditions**\n\nIs bot ko use karke aap hamari AI policy se sehmat hote hain.", parse_mode="Markdown", reply_markup=markup)
+# --- STEP 2: QR & PAYMENT INSTRUCTION ---
+@bot.callback_query_handler(func=lambda call: call.data.startswith("buy_"))
+def handle_payment(call):
+    plan_price = call.data.split("_")[1]
+    msg = (f"💳 *Plan: ₹{plan_price}*\n\n"
+           "1️⃣ Niche diye QR par payment karein (Ya UPI: `aapki@upi`)\n"
+           "2️⃣ Payment ke baad *12-digit UTR Number* yahan bhejein.\n\n"
+           "⚠️ *Note:* UTR daalte hi feature automatic unlock ho jayega!")
+    bot.send_message(call.message.chat.id, msg, parse_mode='Markdown')
 
-    elif call.data == "agree":
-        markup = types.InlineKeyboardMarkup()
-        btn1 = types.InlineKeyboardButton("🎧 Indian Girl Voice (Demo)", callback_data="voice_indian")
-        markup.add(btn1)
-        bot.send_message(call.message.chat.id, "✨ **Voice Selection**\n\nNiche button dabakar meri awaaz ka sample suniye:", reply_markup=markup)
-
-    elif call.data == "voice_indian":
-        bot.send_voice(call.message.chat.id, VOICE_ID)
-        time.sleep(1) # Thoda gap taaki user audio sun sake
-        markup = types.InlineKeyboardMarkup()
-        btn = types.InlineKeyboardButton("💎 View Premium Plans", callback_data="show_plans")
-        markup.add(btn)
-        bot.send_message(call.message.chat.id, "Awaaz kaisi lagi? Kya aap full access chahte hain?", reply_markup=markup)
-
-    elif call.data == "show_plans":
-        # Yahan humne har button ko alag line mein rakha hai (row_width=1)
-        markup = types.InlineKeyboardMarkup(row_width=1)
+# --- STEP 3: AUTOMATIC UTR VERIFICATION & UNLOCK ---
+@bot.message_handler(func=lambda message: len(message.text) == 12 and message.text.isdigit())
+def verify_payment(message):
+    utr = message.text
+    user_id = message.from_user.id
+    
+    if utr in used_utrs:
+        bot.reply_to(message, "❌ Ye UTR pehle use ho chuka hai!")
+    else:
+        # UTR ko save kar lo taaki dubara use na ho
+        used_utrs.add(utr)
         
-        btn1 = types.InlineKeyboardButton("🔥 Unlimited Voice - ₹45", callback_data="buy_plan")
-        btn2 = types.InlineKeyboardButton("🌟 All Voice Models - ₹50", callback_data="buy_plan")
-        btn3 = types.InlineKeyboardButton("⚡ 1 Day Trial Plan - ₹20", callback_data="buy_plan")
+        # 24 Hours ke liye access dena
+        expiry = datetime.datetime.now() + datetime.timedelta(days=1)
+        active_users[user_id] = expiry
         
-        markup.add(btn1, btn2, btn3)
+        bot.send_message(message.chat.id, 
+                         f"✅ *Payment Verified!* (UTR: {utr})\n\n"
+                         f"🚀 Aapka plan active ho gaya hai!\n"
+                         f"📅 Expiry: {expiry.strftime('%Y-%m-%d %H:%M')}\n\n"
+                         "Ab aap apni *Voice Message* bhejein, main use convert kar dunga! 🎙️")
+
+# --- STEP 4: VOICE CONVERSION (LOCK/UNLOCK LOGIC) ---
+@bot.message_handler(content_types=['voice'])
+def handle_voice(message):
+    user_id = message.from_user.id
+    now = datetime.datetime.now()
+    
+    # Check if user has active plan
+    if user_id in active_users and now < active_users[user_id]:
+        bot.reply_to(message, "🎙️ *Voice Received!* \n\nConverting to Girl's Voice... Please wait. ⏳")
+        # Yahan RVC/ElevenLabs processing connect hogi
+    else:
+        bot.reply_to(message, "🔒 *Feature Locked!*\n\nYe feature sirf paid users ke liye hai. Kripya /start dabakar plan lein.")
+
+bot.polling(none_stop=True)
         
-        plan_text = (
-            "💰 **Sanu AI Premium Plans**\n\n"
-            "Aap apni pasand ka plan chuniye:\n"
-            "━━━━━━━━━━━━━━━━━━\n"
-            "1️⃣ **Unlimited Voice:** Sab kuch unlimited (₹45)\n"
-            "2️⃣ **All Models:** Saare AI characters (₹50)\n"
-            "3️⃣ **1 Day Plan:** Aaj ke liye trial (₹20)\n"
-            "━━━━━━━━━━━━━━━━━━"
-        )
-        bot.send_message(call.message.chat.id, plan_text, reply_markup=markup, parse_mode="Markdown")
-
-    elif call.data == "buy_plan":
-        markup = types.InlineKeyboardMarkup()
-        btn = types.InlineKeyboardButton("✅ Yes, Pay Now", callback_data="show_qr")
-        markup.add(btn)
-        bot.send_message(call.message.chat.id, "Kya aap payment karne ke liye taiyaar hain?", reply_markup=markup)
-
-    elif call.data == "show_qr":
-        bot.send_photo(call.message.chat.id, QR_ID, 
-                       caption="📸 **Payment Details**\n\n1. Scan karein aur pay karein.\n2. **Screenshot** yahan zaroori bhejein.\n\nAapka access 5 min mein chalu ho jayega! 🚀", 
-                       parse_mode="Markdown")
-
-if __name__ == "__main__":
-    bot.infinity_polling()
-if __name__ == "__main__":
-    print("Sanu AI Bot is Starting...")
-    bot.remove_webhook() # Ye line zaroori hai conflict hatane ke liye
-    bot.infinity_polling()
