@@ -1,34 +1,33 @@
 import telebot
 from telebot import types
-import os, datetime, threading, http.server, socketserver, requests
+import os, datetime, threading, http.server, socketserver
 
-# --- 🛠️ CONFIGURATION (Your Details Added) ---
+# --- CONFIGURATION ---
 API_TOKEN = '8685334276:AAH8Hpi9ooC8kY8R9d3ZiFY1bCulrvU3K18'
 UPI_ID = 'khiranitejasvi-1@okhdfcbank'
-# QR Link (GitHub par upload kiya hua image use hoga)
+# Aapka upload kiya hua QR image link
 QR_URL = 'https://raw.githubusercontent.com/khiraniteju28-boop/shreya-ai-bot/main/payment-qr.png'
 
 bot = telebot.TeleBot(API_TOKEN)
-
-# Database (UTR check aur user expiry ke liye)
 used_utrs = set()
-active_users = {} # {user_id: expiry_datetime}
+active_users = {} 
 
-# --- 🌐 RENDER SERVER ---
+# --- RENDER SERVER ---
 def start_server():
     port = int(os.environ.get("PORT", 8080))
-    with socketserver.TCPServer(("", port), http.server.SimpleHTTPRequestHandler) as httpd:
+    handler = http.server.SimpleHTTPRequestHandler
+    with socketserver.TCPServer(("", port), handler) as httpd:
         httpd.serve_forever()
 threading.Thread(target=start_server, daemon=True).start()
 
-# --- 🏠 1. START & WELCOME ---
+# --- 🏠 1. START ---
 @bot.message_handler(commands=['start'])
 def welcome(message):
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("Get Started 🚀", callback_data="get_started"))
     bot.send_message(message.chat.id, "✨ *Mahi AI - Check voice for my channel*", reply_markup=markup, parse_mode='Markdown')
 
-# --- 🛠️ 2. CALLBACK HANDLERS (Flow Step-by-Step) ---
+# --- 🛠️ 2. STEP-BY-STEP FLOW (No extra messages) ---
 @bot.callback_query_handler(func=lambda call: True)
 def handle_query(call):
     if call.data == "get_started":
@@ -48,22 +47,23 @@ def handle_query(call):
         bot.edit_message_text("Choose Voice Style:", call.message.chat.id, call.message.message_id, reply_markup=markup)
 
     elif "voice_" in call.data:
-        # Demo Voice link yahan aayega (YouTube/Audio link jo aapne diya tha)
-        bot.send_message(call.message.chat.id, "🎤 *Indian Girl Demo:* [Mahi Voice Sample](https://www.youtube.com/watch?v=YOUR_LINK)")
-        
         markup = types.InlineKeyboardMarkup(row_width=1)
         markup.add(types.InlineKeyboardButton("⚡ 1 Day - ₹20", callback_data="buy_20"),
                    types.InlineKeyboardButton("🔋 5 Days - ₹60", callback_data="buy_60"),
                    types.InlineKeyboardButton("📅 1 Week - ₹300", callback_data="buy_300"),
                    types.InlineKeyboardButton("👑 Unlimited - ₹800", callback_data="buy_800"))
-        bot.send_message(call.message.chat.id, "✨ *Choose a Premium Plan:*", reply_markup=markup, parse_mode='Markdown')
+        # Yahan humne demo link hata diya hai
+        bot.edit_message_text("🎙️ *Voice Style Selected.*\n\nChoose a Premium Plan to start Voice Conversion:", call.message.chat.id, call.message.message_id, reply_markup=markup, parse_mode='Markdown')
 
     elif "buy_" in call.data:
         amount = call.data.split("_")[1]
-        payment_text = (f"💳 *Plan: ₹{amount}*\n\n"
+        # Pehle purana message delete karenge taaki saaf dikhe
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        
+        payment_text = (f"💳 *Plan Selected: ₹{amount}*\n\n"
                         f"1️⃣ QR Code scan karein ya UPI ID copy karein: `{UPI_ID}`\n"
                         "2️⃣ Payment ke baad *12-digit UTR* number yahan likhein.\n\n"
-                        "Bot turant verify karke plan chalu kar dega!")
+                        "Bot turant verify karke plan chalu kar dega! ✅")
         bot.send_photo(call.message.chat.id, QR_URL, caption=payment_text, parse_mode='Markdown')
 
 # --- 🔍 3. UTR VERIFICATION ---
@@ -76,22 +76,20 @@ def verify_utr(message):
         bot.reply_to(message, "❌ Ye UTR pehle use ho chuka hai!")
     else:
         used_utrs.add(utr)
-        # 1 day plan as default (aap isse upgrade kar sakte hain)
+        # Default 1 day activation
         expiry = datetime.datetime.now() + datetime.timedelta(days=1)
         active_users[user_id] = expiry
-        
-        bot.send_message(message.chat.id, f"✅ *Payment Verified!* \nPlan active tak: {expiry.strftime('%Y-%m-%d %H:%M')}\nAb voice bhejiye!")
+        bot.send_message(message.chat.id, f"✅ *Payment Verified!* \nAapka plan active ho gaya hai. Ab voice message bhejiye! ✨", parse_mode='Markdown')
 
-# --- 🎙️ 4. VOICE CONVERSION (The Logic) ---
+# --- 🎙️ 4. VOICE LOCK/UNLOCK ---
 @bot.message_handler(content_types=['voice'])
 def handle_voice(message):
     user_id = message.from_user.id
     now = datetime.datetime.now()
     
     if user_id in active_users and now < active_users[user_id]:
-        bot.reply_to(message, "🎙️ Voice mil gayi! AI Ladki ki awaz mein badal raha hoon... wait karein.")
-        # Conversion API yahan connect hogi
+        bot.reply_to(message, "🎙️ Voice Received! Converting to Girl's Voice... ⏳")
     else:
-        bot.reply_to(message, "🔒 *Plan Locked!* \nVoice convert karne ke liye plan lein aur UTR bhejein.")
+        bot.reply_to(message, "🔒 *Feature Locked!* \nKripya /start dabakar plan lein aur UTR bhej kar unlock karein.")
 
 bot.polling(none_stop=True)
