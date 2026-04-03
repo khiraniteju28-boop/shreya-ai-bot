@@ -1,46 +1,64 @@
 import telebot
 from telebot import types
 
-# Yahan apna Telegram Bot Token daalein (Jo BotFather se mila tha)
-API_TOKEN = 'YAHAN_APNA_TOKEN_DALIYE'
+# Aapka Token
+TOKEN = '8693684961:AAFS_FSIT-YXERUQbRKY1vHF65rl_qTkr7s'
+bot = telebot.TeleBot(TOKEN)
 
-bot = telebot.TeleBot(API_TOKEN)
+# Aapne jo IDs nikaali hain
+VOICE_ID = 'CQACAgUAAxkBAAMEac9GSP_qhGjfciUVWyRWgZQlWrIAAvkyAAJnbXlWNLMfgqGS2eE6BA'
+QR_ID = 'AgACAgUAAxkBAAMFac9GWRbB7EM7vIURPtuv-TBW3iEAAr8NaxtnbXlWZOt8lXnDAx4BAAMCAAN5AAM6BA'
 
-# Jab koi /start likhe
-@bot.message_code_handler(commands=['start', 'help'])
-def send_welcome(message):
-    markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
-    
-    # Aapke Store ke Buttons
-    btn1 = types.KeyboardButton('🛍️ Mishu Store')
-    btn2 = types.KeyboardButton('👗 Clothes Collection')
-    btn3 = types.KeyboardButton('🎨 Crafts & Arts')
-    btn4 = types.KeyboardButton('📞 Contact Us')
-    
-    markup.add(btn1, btn2, btn3, btn4)
-    
-    welcome_text = (
-        "✨ **Welcome to Sanu AI!** ✨\n\n"
-        "Aapka swagat hai hamare digital store mein.\n"
-        "Niche diye gaye buttons ka use karke hamara collection dekhein."
-    )
-    bot.reply_to(message, welcome_text, reply_markup=markup, parse_mode='Markdown')
+@bot.message_handler(commands=['start'])
+def welcome(message):
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Get Started", callback_data="get_started")
+    markup.add(btn)
+    bot.send_message(message.chat.id, "Welcome to Sanu AI\n\nCheck voice for my channel", reply_markup=markup)
 
-# Buttons par click karne par kya hoga
-@bot.message_handler(func=lambda message: True)
-def handle_messages(message):
-    if message.text == '🛍️ Mishu Store':
-        bot.reply_to(message, "Hamara Mishu Store jald hi live hone wala hai! Stay tuned.")
-    
-    elif message.text == '👗 Clothes Collection':
-        bot.reply_to(message, "👗 Trending Kapde:\n1. Saree\n2. Kurtis\n3. Kids Wear\n\nOrder ke liye message karein.")
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    if call.data == "get_started":
+        markup = types.InlineKeyboardMarkup()
+        btn = types.InlineKeyboardButton("Agree", callback_data="agree")
+        markup.add(btn)
+        bot.send_message(call.message.chat.id, "Let's Get Started with Sanu AI\n\n*Note: By using AI you agree to our terms*", parse_mode="Markdown", reply_markup=markup)
+
+    elif call.data == "agree":
+        markup = types.InlineKeyboardMarkup()
+        # Sirf Indian Girl rakha hai jaisa aapne bola tha
+        btn1 = types.InlineKeyboardButton("Indian Girl 🇮🇳", callback_data="voice_indian")
+        markup.add(btn1)
+        bot.send_message(call.message.chat.id, "Kya aap hamari voice demo check karna chahoge?\nChoose your voice model:", reply_markup=markup)
+
+    elif call.data == "voice_indian":
+        # Voice ID se audio bhej raha hai
+        bot.send_voice(call.message.chat.id, VOICE_ID)
         
-    elif message.text == '🎨 Crafts & Arts':
-        bot.reply_to(message, "🎨 Handmade Items:\n1. Home Decor\n2. Gift Items\n\nUnique crafts yahan milenge.")
-        
-    elif message.text == '📞 Contact Us':
-        bot.reply_to(message, "Hamein contact karne ke liye @AapkaUsername par message karein.")
+        markup = types.InlineKeyboardMarkup()
+        btn = types.InlineKeyboardButton("Yes", callback_data="show_plans")
+        markup.add(btn)
+        bot.send_message(call.message.chat.id, "Kya aap hamara plan choose karna chahoge?", reply_markup=markup)
 
-# Bot ko chalu rakhne ke liye
-print("Sanu AI is running...")
+    elif call.data == "show_plans":
+        markup = types.InlineKeyboardMarkup()
+        btn1 = types.InlineKeyboardButton("Unlimited Voice - ₹45", callback_data="buy_plan")
+        btn2 = types.InlineKeyboardButton("10 Download Voice - ₹10", callback_data="buy_plan")
+        btn3 = types.InlineKeyboardButton("20 All Voice Models - ₹20", callback_data="buy_plan")
+        btn4 = types.InlineKeyboardButton("Call Support - ₹50", callback_data="buy_plan")
+        markup.add(btn1, btn2)
+        markup.add(btn3, btn4)
+        bot.send_message(call.message.chat.id, "Choose a plan:", reply_markup=markup)
+
+    elif call.data == "buy_plan":
+        markup = types.InlineKeyboardMarkup()
+        btn = types.InlineKeyboardButton("Yes", callback_data="show_qr")
+        markup.add(btn)
+        bot.send_message(call.message.chat.id, "When you buy?", reply_markup=markup)
+
+    elif call.data == "show_qr":
+        # QR ID se photo bhej raha hai
+        bot.send_photo(call.message.chat.id, QR_ID, caption="QR valid for 5 minutes.\n\n*Payment ke baad screenshot zaroori bhejein*", parse_mode="Markdown")
+
+print("Sanu AI Bot is LIVE with Voice IDs...")
 bot.infinity_polling()
