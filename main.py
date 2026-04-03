@@ -61,4 +61,4 @@ def callback_query(call):
         bot.send_photo(call.message.chat.id, QR_ID, caption="QR valid for 5 minutes.\n\n*Payment ke baad screenshot zaroori bhejein*", parse_mode="Markdown")
 
 print("Sanu AI Bot is LIVE with Voice IDs...")
-bot.infinity_polling()
+bot.infinity_polling() 
