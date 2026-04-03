@@ -1,3 +1,16 @@
+import os
+import http.server
+import socketserver
+import threading
+
+# Render ko dhoka dene ke liye dummy port server
+def start_server():
+    port = int(os.environ.get("PORT", 8080))
+    handler = http.server.SimpleHTTPRequestHandler
+    with socketserver.TCPServer(("", port), handler) as httpd:
+        httpd.serve_forever()
+
+threading.Thread(target=start_server, daemon=True).start()
 import telebot
 from telebot import types
 import time
